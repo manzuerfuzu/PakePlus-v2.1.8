@@ -1,11 +1,361 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        Hello World
-    </body>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>紫格格的PP应用1-网址打开工具</title>
+    <style>
+      /* 整体样式美化，适配Avalonia WebView */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Microsoft YaHei", Arial, sans-serif;
+      }
+
+      body {
+        background-color: #f5f5f5;
+        padding: 0; /* 移除body默认padding，避免顶部固定区域错位 */
+        margin: 0;
+      }
+
+      /* 1. 新增：顶部固定区域样式 */
+      .top-fixed {
+        position: fixed; /* 固定在顶部 */
+        top: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        z-index: 999; /* 确保在最上层 */
+      }
+
+      .container {
+        /* max-width: 800px; */
+        margin: 0 auto;
+        padding-top: 180px; /* 给顶部固定区域留出空间，避免内容被遮挡 */
+        background: transparent; /* 取消背景色，避免和固定区域重叠 */
+        box-shadow: none; /* 取消阴影 */
+      }
+
+      h1 {
+        color: #7707c5; /* 匹配你项目的紫色主题 */
+        margin-bottom: 20px;
+        text-align: center;
+        font-size: 24px;
+      }
+
+      .input-group {
+        display: flex;
+        flex-wrap: wrap; /* 适配小屏幕换行 */
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      #urlInput {
+        flex: 1;
+        min-width: 300px; /* 小屏幕最小宽度 */
+        padding: 12px 15px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.3s;
+      }
+
+      #urlInput:focus {
+        border-color: #7707c5;
+        box-shadow: 0 0 0 2px rgba(119, 7, 197, 0.1);
+      }
+
+      /* 隐藏原生文件选择框，用按钮样式替代 */
+      #fileInput {
+        display: none;
+      }
+
+      /* 新增：文件选择按钮样式（补回之前误删的按钮） */
+      .file-select-btn {
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        background-color: #2e8b57;
+        color: white;
+        transition: background-color 0.3s;
+        display: inline-block;
+      }
+      .file-select-btn:hover {
+        opacity: 0.9;
+      }
+      .file-select-btn:active {
+        transform: scale(0.98);
+      }
+
+      .btn-group {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: background-color 0.3s;
+      }
+
+      #openCurrentBtn {
+        background-color: #00bfff;
+        color: white;
+      }
+
+      #openNewBtn {
+        background-color: #7707c5;
+        color: white;
+      }
+
+      button:hover {
+        opacity: 0.9;
+      }
+
+      button:active {
+        transform: scale(0.98);
+      }
+
+      #webview-container {
+        margin-top: 20px;
+        width: 100%;
+        height: 600px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+        display: none; /* 初始隐藏，打开文件后显示 */
+      }
+
+      .tip-text {
+        color: #666;
+        margin-top: 5px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .error-tip {
+        color: #ff4444;
+        margin-top: 5px;
+        font-size: 12px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 2. 新增：顶部固定区域 -->
+    <div class="top-fixed">
+      <!-- <h1>网址/本地HTML打开工具</h1> -->
+
+      <!-- 输入和按钮区域 -->
+      <div class="input-group">
+        <input
+          type="text"
+          id="urlInput"
+          placeholder="请输入本地HTML文件路径（如D:\test.html）或在线网址"
+        />
+        <div class="btn-group">
+          <!-- 补回文件选择按钮 -->
+          <!-- <label for="fileInput" class="file-select-btn">
+                    选择本地HTML文件
+                </label> -->
+          <input type="file" id="fileInput" accept=".html,.htm" />
+          <button id="openCurrentBtn">在当前页打开（仅本地文件）</button>
+          <button id="openNewBtn">在新窗口中打开</button>
+        </div>
+      </div>
+      <div class="tip-text">
+        提示：在线网址因安全限制仅支持新窗口打开，本地HTML文件可在当前页加载
+      </div>
+      <div class="error-tip" id="errorTip">
+        请输入有效的本地HTML文件路径或在线网址
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- 当前页显示本地HTML的容器 -->
+      <iframe id="webview-container" frameborder="0"></iframe>
+    </div>
+
+    <script>
+      // 获取DOM元素
+      const urlInput = document.getElementById("urlInput");
+      const fileInput = document.getElementById("fileInput");
+      const openCurrentBtn = document.getElementById("openCurrentBtn");
+      const openNewBtn = document.getElementById("openNewBtn");
+      const webviewContainer = document.getElementById("webview-container");
+      const errorTip = document.getElementById("errorTip");
+
+      // 校验：是否为本地文件路径（.html/.htm结尾）
+      function isLocalHtmlFile(path) {
+        const localFileRegex = /\.(html|htm)$/i;
+        // 匹配本地路径格式（如 D:\test.html 或 /home/test.html）
+        return (
+          localFileRegex.test(path) &&
+          !path.startsWith("http://") &&
+          !path.startsWith("https://")
+        );
+      }
+
+      // 校验：是否为在线网址
+      function isOnlineUrl(url) {
+        const urlRegex =
+          /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w.-]*)*\/?$/;
+        return urlRegex.test(url);
+      }
+
+      // 补全在线网址前缀
+      function completeUrl(url) {
+        if (
+          isOnlineUrl(url) &&
+          !url.startsWith("http://") &&
+          !url.startsWith("https://")
+        ) {
+          return "https://" + url;
+        }
+        return url;
+      }
+
+      // 转换本地文件路径为浏览器可识别的file://协议
+      function convertToFileProtocol(path) {
+        // 处理Windows路径（替换\为/，添加file:///）
+        if (path.includes(":\\")) {
+          return "file:///" + path.replace(/\\/g, "/");
+        }
+        // 处理Linux/macOS路径
+        else if (path.startsWith("/")) {
+          return "file://" + path;
+        }
+        // 相对路径
+        else {
+          return (
+            "file://" +
+            window.location.href.substring(
+              0,
+              window.location.href.lastIndexOf("/"),
+            ) +
+            "/" +
+            path
+          );
+        }
+      }
+
+      // 文件选择器：选择本地HTML文件
+      fileInput.addEventListener("change", function (e) {
+        if (e.target.files.length > 0) {
+          const file = e.target.files[0];
+          // 显示文件路径到输入框
+          urlInput.value = file.path || file.name;
+          // 自动在当前页加载选中的文件
+          openInCurrentPage();
+        }
+      });
+
+      // 3. 核心修改：回车事件区分本地/在线网址
+      urlInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          const inputValue = urlInput.value.trim();
+          if (!inputValue) {
+            showError();
+            return;
+          }
+          // 判断是本地文件还是在线网址
+          if (isLocalHtmlFile(inputValue)) {
+            openInCurrentPage(); // 本地文件：当前页打开
+          } else if (isOnlineUrl(inputValue)) {
+            openNewWindow(); // 在线网址：新窗口打开
+          } else {
+            showError(); // 无效输入：显示错误
+          }
+        }
+      });
+
+      // 按钮：在当前页打开（仅支持本地HTML文件）
+      openCurrentBtn.addEventListener("click", openInCurrentPage);
+
+      // 按钮：在新窗口打开（支持本地文件/在线网址）
+      openNewBtn.addEventListener("click", openNewWindow);
+
+      // 封装：当前页打开逻辑（抽离为独立函数）
+      function openInCurrentPage() {
+        const inputValue = urlInput.value.trim();
+        if (!inputValue) {
+          showError();
+          return;
+        }
+
+        // 仅处理本地HTML文件
+        if (isLocalHtmlFile(inputValue)) {
+          try {
+            const fileUrl = convertToFileProtocol(inputValue);
+            webviewContainer.style.display = "block";
+            webviewContainer.src = fileUrl;
+            hideError();
+          } catch (err) {
+            showError();
+            webviewContainer.style.display = "none";
+          }
+        } else {
+          showError();
+          webviewContainer.style.display = "none";
+          alert("当前页仅支持打开本地HTML文件，在线网址请选择「新窗口打开」");
+        }
+      }
+
+      // 封装：新窗口打开逻辑
+      function openNewWindow() {
+        const inputValue = urlInput.value.trim();
+        if (!inputValue) {
+          showError();
+          return;
+        }
+
+        let targetUrl = "";
+        // 本地文件
+        if (isLocalHtmlFile(inputValue)) {
+          targetUrl = convertToFileProtocol(inputValue);
+        }
+        // 在线网址
+        else if (isOnlineUrl(inputValue)) {
+          targetUrl = completeUrl(inputValue);
+        }
+        // 无效输入
+        else {
+          showError();
+          return;
+        }
+
+        // 打开新窗口
+        const windowWidth = 1000;
+        const windowHeight = 800;
+        const left = (screen.width - windowWidth) / 2;
+        const top = (screen.height - windowHeight) / 2;
+        window.open(
+          targetUrl,
+          "_blank",
+          `width=${windowWidth},height=${windowHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+        );
+        hideError();
+      }
+
+      // 显示/隐藏错误提示
+      function showError() {
+        errorTip.style.display = "block";
+      }
+      function hideError() {
+        errorTip.style.display = "none";
+      }
+    </script>
+  </body>
 </html>
